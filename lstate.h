@@ -72,9 +72,9 @@ typedef struct global_State {
   lu_byte currentwhite;
   lu_byte gcstate;  /* state of garbage collector */
   int sweepstrgc;  /* position of sweep in `strt' */
-  GCObject *rootgc;  /* list of all collectable objects */
-  GCObject **sweepgc;  /* position of sweep in `rootgc' */
-  GCObject *gray;  /* list of gray objects */
+  GCObject *rootgc;  /* list of all collectable objects */  //新创建的元素存在该链表中
+  GCObject **sweepgc;  /* position of sweep in `rootgc' */ 
+  GCObject *gray;  /* list of gray objects */  //灰色对象存放在该链表中
   GCObject *grayagain;  /* list of objects to be traversed atomically */
   GCObject *weak;  /* list of weak tables (to be cleared) */
   GCObject *tmudata;  /* last element of list of userdata to be GC */

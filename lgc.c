@@ -31,6 +31,8 @@
 
 #define maskmarks	cast_byte(~(bitmask(BLACKBIT)|WHITEBITS))
 
+  //把第三位（black、white）的状态清掉，然后再与当前的white进行或
+  //一句话总结就是赋值当前的white
 #define makewhite(g,x)	\
    ((x)->gch.marked = cast_byte(((x)->gch.marked & maskmarks) | luaC_white(g)))
 
@@ -69,7 +71,10 @@ static void removeentry (Node *n) {
 static void reallymarkobject (global_State *g, GCObject *o) {
   lua_assert(iswhite(o) && !isdead(g, o));
   white2gray(o);
+  //类型中的gclist就是next指针
+  //把待回收的object都放到gray这个链表中去
   switch (o->gch.tt) {
+    //string为什么可以直接返回,不用放到gray链表上去
     case LUA_TSTRING: {
       return;
     }
@@ -279,8 +284,10 @@ static l_mem propagatemark (global_State *g) {
   lua_assert(isgray(o));
   gray2black(o);
   switch (o->gch.tt) {
-    case LUA_TTABLE: {
+  case LUA_TTABLE: {
       Table *h = gco2h(o);
+      //取gray链表上的下一个元素
+      //gclist相当于next指针
       g->gray = h->gclist;
       if (traversetable(g, h))  /* table is weak? */
         black2gray(o);  /* keep it gray */
@@ -409,6 +416,7 @@ static GCObject **sweeplist (lua_State *L, GCObject **p, lu_mem count) {
   while ((curr = *p) != NULL && count-- > 0) {
     if (curr->gch.tt == LUA_TTHREAD)  /* sweep open upvalues of each thread */
       sweepwholelist(L, &gco2th(curr)->openupval);
+    //QA: 这个判断的逻辑
     if ((curr->gch.marked ^ WHITEBITS) & deadmask) {  /* not dead? */
       lua_assert(!isdead(g, curr) || testbit(curr->gch.marked, FIXEDBIT));
       makewhite(g, curr);  /* make it white (for next cycle) */
@@ -519,7 +527,8 @@ static void remarkupvals (global_State *g) {
   }
 }
 
-
+// Q: 这段逻辑没看到加锁逻辑，怎么保证没有新的gray 
+// A: 因为lua是单线程的程序，该函数不允许分布完成，所以只要进入该函数逻辑，就必然没有其他mutator会操作
 static void atomic (lua_State *L) {
   global_State *g = G(L);
   size_t udsize;  /* total size of userdata to be finalized */
@@ -545,7 +554,8 @@ static void atomic (lua_State *L) {
   /* flip current white */
   g->currentwhite = cast_byte(otherwhite(g));
   g->sweepstrgc = 0;
-  g->sweepgc = &g->rootgc;
+  //rootgc上有全量的数据，gray上面是需要扫描的元素(mark的时候加入的)
+  g->sweepgc = &g->rootgc; //新创建的元素都在rootgc上面，通过标记位来判断是否要sweep
   g->gcstate = GCSsweepstring;
   g->estimate = g->totalbytes - udsize;  /* first estimate */
 }
@@ -563,12 +573,14 @@ static l_mem singlestep (lua_State *L) {
       if (g->gray)
         return propagatemark(g);
       else {  /* no more `gray' objects */
+      //这个函数一次执行完，不允许中断
         atomic(L);  /* finish mark phase */
         return 0;
       }
     }
     case GCSsweepstring: {
       lu_mem old = g->totalbytes;
+      //由于string没有引用的关系，只要是白色就可以清理,所以string在前面mark的过程中不需要染黑,也不需要再次扫描
       sweepwholelist(L, &g->strt.hash[g->sweepstrgc++]);
       if (g->sweepstrgc >= g->strt.size)  /* nothing more to sweep? */
         g->gcstate = GCSsweep;  /* end sweep-string phase */
@@ -639,6 +651,7 @@ void luaC_fullgc (lua_State *L) {
     g->gray = NULL;
     g->grayagain = NULL;
     g->weak = NULL;
+    //为什么这里要设置成GCSsweepstring,跳过前面的Spause和Spropagate?
     g->gcstate = GCSsweepstring;
   }
   lua_assert(g->gcstate != GCSpause && g->gcstate != GCSpropagate);
@@ -654,7 +667,7 @@ void luaC_fullgc (lua_State *L) {
   setthreshold(g);
 }
 
-
+//o是已经扫描完的对象，v是刚创建的对象（白色）
 void luaC_barrierf (lua_State *L, GCObject *o, GCObject *v) {
   global_State *g = G(L);
   lua_assert(isblack(o) && iswhite(v) && !isdead(g, v) && !isdead(g, o));

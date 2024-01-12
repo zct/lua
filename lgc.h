@@ -50,7 +50,10 @@
 ** bit 6 - object is "super" fixed (only the main thread)
 */
 
-
+//为什么有两个white，新创建的对象设置成另外一种white状态
+//清理 还未结束的时候，这时候新创建的对象设置另外一种white状态
+//清理是从rootgc开始扫描的，会将黑色的对象设置成白色（只会扫描一次)
+//标记的过程中，创建的对象设置成currentWhite
 #define WHITE0BIT	0
 #define WHITE1BIT	1
 #define BLACKBIT	2
@@ -103,8 +106,9 @@ LUAI_FUNC void luaC_step (lua_State *L);
 LUAI_FUNC void luaC_fullgc (lua_State *L);
 LUAI_FUNC void luaC_link (lua_State *L, GCObject *o, lu_byte tt);
 LUAI_FUNC void luaC_linkupval (lua_State *L, UpVal *uv);
-LUAI_FUNC void luaC_barrierf (lua_State *L, GCObject *o, GCObject *v);
-LUAI_FUNC void luaC_barrierback (lua_State *L, Table *t);
+LUAI_FUNC void luaC_barrierf (lua_State *L, GCObject *o, GCObject *v); //标记过程向前一步, v是新对象
+LUAI_FUNC void luaC_barrierback (lua_State *L, Table *t);   //标记过程向后一步,只有table需要向后退一步,并且放入的是grayagain链表
+															//(lua中不存在结构体,只有table有引用多个对象)
 
 
 #endif

@@ -68,6 +68,7 @@ typedef union {
 ** Tagged Values
 */
 
+// 这个tt和Gcobject里面的tt有啥区别
 #define TValuefields	Value value; int tt
 
 typedef struct lua_TValue {
@@ -275,7 +276,7 @@ typedef struct UpVal {
   CommonHeader;
   TValue *v;  /* points to stack or to its own value */
   union {
-    TValue value;  /* the value (when closed) */
+    TValue value;  /* the value (when closed) */   //当引用的数据栈上不再存在的死后，需要放到这里
     struct {  /* double linked list (when open) */
       struct UpVal *prev;
       struct UpVal *next;
